@@ -1,27 +1,15 @@
-aowl.AddCommand("drop",function(ply)
-
-	-- Admins not allowed either, this is added for gamemodes and stuff
-
-	local ok = hook.Run("CanDropWeapon", ply)
-	if (ok == false) then
-		return false
-	end
-	if GAMEMODE.DropWeapon then
-		GAMEMODE:DropWeapon(ply)
-	else
-		if ply:GetActiveWeapon():IsValid() then
-			ply:DropWeapon(ply:GetActiveWeapon())
-		end
-	end
-end, "players", true)
-
 do -- give weapon
+	
 	local prefixes = {
 		"",
 		"weapon_",
 		"weapon_fwp_",
 		"weapon_cs_",
 		"tf_weapon_",
+		"tfa_cso_",
+		"cw_gau_",
+		"cw_",
+		"cw_g4p_",
 	}
 
 	local weapons_engine = {
@@ -42,8 +30,13 @@ do -- give weapon
 	}
 
 	aowl.AddCommand("give", function(ply, line, target, weapon, ammo1, ammo2)
-		local ent = easylua.FindEntity(target)
+
+		local ent = ((isstring(target) and isstring(weapon)) and easylua.FindEntity(target)) or ply
+
+		if not isstring(weapon) and ent==ply then weapon = target end
+
 		if not ent:IsPlayer() then return false, aowl.TargetNotFound(target) end
+
 		if not isstring(weapon) or weapon == "#wep" then
 			local wep = ply:GetActiveWeapon()
 			if IsValid(wep) then
@@ -52,6 +45,7 @@ do -- give weapon
 				return false,"Invalid weapon"
 			end
 		end
+
 		ammo1 = tonumber(ammo1) or 0
 		ammo2 = tonumber(ammo2) or 0
 		for _,prefix in ipairs(prefixes) do
@@ -70,12 +64,27 @@ do -- give weapon
 				end
 				return
 			end
-		end
+	end
+	local matches = {}
+
+	    for k, v in pairs(weapons.GetList()) do
+	        if string.find(string.lower(v.PrintName or ""), string.lower(weapon)) or string.find(string.lower(v.ClassName or ""), string.lower(weapon)) then
+	            matches[#matches+1] = v.ClassName or ""
+	        end
+        end
+    local errtxt = "Multiple matches found: "
+
+	    if #matches>=1 then 
+	        ent:Give(matches[1])
+	        ply:ChatPrint('Giving ' .. matches[1] .. ' to ' .. ent:Nick())
+	        return true
+	    end
+
 		return false, "Couldn't find " .. weapon
-	end, "developers")
+	end, "superadmin")
 end
 
-aowl.AddCommand("giveammo",function(ply, line,ammo,ammotype)
+aowl.AddCommand("ammo",function(ply, line,ammo,ammotype)
 	if !ply:Alive() and !IsValid(ply:GetActiveWeapon()) then return end
 	local amt = tonumber(ammo) or 500
 	local wep = ply:GetActiveWeapon()
@@ -86,4 +95,4 @@ aowl.AddCommand("giveammo",function(ply, line,ammo,ammotype)
 	else
 		ply:GiveAmmo(amt,ammotype)
 	end
-end, "players")
+end, "superadmin")

@@ -1,18 +1,13 @@
-local aowl = {}
-_G.aowl = aowl
-
-local luadata = requirex("luadata")
-local easylua = requirex("easylua")
-
-local USERSFILE = "aowl/users.txt"
+aowl = aowl or {}
 
 timer.Simple(1, function() hook.Run("AowlInitialized") end)
 CreateConVar("aowl_hide_ranks", "1", FCVAR_REPLICATED)
 
-aowl.Prefix			= "[!|/|%.]" -- a pattern
+aowl.Prefix			= "[|/|%.]" -- a pattern
 aowl.StringPattern	= "[\"|']" -- another pattern
-aowl.ArgSepPattern	= "[,]" -- would you imagine that yet another one
-aowl.EscapePattern	= "[\\]" -- holy shit another one! holy shit again they are all teh same length! Unintentional! I promise!!1
+aowl.ArgSepPattern	= "[,%s]" -- could you imagine, yet another one
+aowl.EscapePattern	= "[\\]" -- holy shit another one!
+
 team.SetUp(1, "default", Color(68, 112, 146))
 
 function aowlMsg(cmd, line)
@@ -49,6 +44,27 @@ do -- commands
 		if type(ply) == "string" and ply:find("STEAM_") then
 			steamid = ply
 		end
+		local echo = {}
+
+		local i = table.insert
+
+		i(echo, Color(120, 120, 230))
+		i(echo, "[aowl] ")
+		i(echo, Color(110, 190, 110))
+
+		local argstring = tostring(unpack(args) or "[none!]")
+		local nick = (IsValid(ply) and ply:Nick()) or "Console?"
+		local sid = (IsValid(ply) and ply:SteamID()) or "No SID?"
+		i(echo, nick .. "(" .. sid .. ") ran command \"" ..
+			cmd .. "\" with args: " .. argstring .. "\n")
+
+		for k,v in pairs(player.GetAll()) do
+			if v:IsAdmin() then
+				v:ConsoleAddText(unpack(echo))
+			end
+		end
+
+
 
 		local ok, msg = pcall(function()
 			cmd = aowl.cmds[cmd]
@@ -58,7 +74,6 @@ do -- commands
 
 				local tstart = SysTime()
 				local allowed, reason = hook.Call("AowlCommand", GAMEMODE, cmd, ply, line, unpack(args))
-
 				if allowed ~= false then
 					easylua.Start(ply)
 					local isok
@@ -68,25 +83,28 @@ do -- commands
 					local d  = tstop-tstart
 
 					if d<0 or d>0.2 then
-						Msg"[Aowl] "print(ply,"command",cmd.cmd,"took",math.Round(d*1000) .. ' ms')
+						Msg"[Aowl] "print(ply,"command",cmd.cmd,"took",math.Round(d*1000) .. " ms")
 					end
 
 					if not isok then
-						ErrorNoHalt("Aowl cmd "..tostring(cmd and cmd.cmd).." failed:\n    "..tostring(allowed)..'\n')
-						reason = "INTERNAL ERROR"
+						ErrorNoHalt("Aowl cmd "..tostring(cmd and cmd.cmd).." failed:\n    "..tostring(allowed).."\n")
+						reason = "COMMAND ERROR"
 						allowed = false
 					end
 				end
 
 				if ply:IsValid() then
 					if reason then
-						aowl.Message(ply, reason, allowed==false and 'error' or 'generic')
+						aowl.Message(ply, reason, allowed==false and "error" or "generic")
 					end
 
 					if allowed==false then
 						ply:EmitSound("buttons/button8.wav", 100, 120)
 					end
 				end
+			else
+				if IsValid(ply) then ply:ChatPrint("no rights") end
+				return false, "no rights buddy"
 			end
 		end)
 		if not ok then
@@ -100,7 +118,7 @@ do -- commands
 			local cmd = args[1]
 			table.remove(args, 1)
 			_G.COMMAND = true
-				aowl.CallCommand(ply, cmd, table.concat(args, " "), args)
+				aowl.CallCommand(ply, cmd, line:gsub("a?o?w?l?%s?" .. cmd .. "%s", ""), args)
 			_G.COMMAND = nil
 		end
 	end
@@ -120,7 +138,7 @@ do -- commands
 					aowl.CallCommand(ply, cmd, line, line and aowl.ParseArgs(line) or {})
 				_G.CHAT = nil
 
-				if aowlcmd.hidechat then return "" end
+				if aowlcmd.hidechat or ply.InDevMode then return "" end
 			end
 		end
 	end
@@ -172,8 +190,8 @@ do -- util
 				InString=false
 			elseif(char:find(aowl.ArgSepPattern) and not InString) then
 				if(chr~="") then
-				    table.insert(ret,chr)
-				    chr=""
+					table.insert(ret,chr)
+					chr=""
 				end
 			else
 					chr=chr..char
@@ -223,7 +241,6 @@ do -- util
 
 	end, "developers")
 end
-
 
 do -- countdown
 	if SERVER then
@@ -415,84 +432,64 @@ end
 
 do -- groups
 
-	do -- team setup
-		function team.GetIDByName(name)
-			do return 3003 end
-
-			for id, data in pairs(team.GetAllTeams()) do
-				if data.Name == name then
-					return id
-				end
-			end
-			return 1
-		end
-	end
-
 	local list =
 	{
-		players = 1,
-		--moderators = 2,
-		emeritus = 2, -- 3
-		developers = 3, -- 4,
+		user = 1,
+		trusted = 2,
+		mods = 3,
+		admins = 4,
+		developers = 5,
 		owners = math.huge,
 	}
-
+	aowl.UGroupList = list
 	local alias =
 	{
-		user = "players",
-		default = "players",
-		admin = "developers",
-		moderators = "developers",
+		players = "user",
+
+		vip = "trusted",
+		["vip+"] = "trusted",
+
+		-- ban vadikus
+		moderators = "mods",
+		moderator = "mods",
+		mod = "mods",
+
+		helper = "mods",
+		helpers = "mods",
+
+		admin = "admins",
+		trialadmin = "admins",
+
+		developer = "developers",
+		dev = "developers",
+
+		owner = "owners",
 		superadmin = "owners",
 		superadmins = "owners",
-		administrator = "developers",
+		manager = "owners",
 	}
 
+	aowl.UGroupAliases = alias
 	local META = FindMetaTable("Player")
 
 	function META:CheckUserGroupLevel(name)
-
 		--Console?
 		if not self:IsValid() then return true end
 
+		name = alias[name] or aowl.UGroupAliases[name] or name
 
-		name = alias[name] or name
-		local ugroup=self:GetUserGroup()
+		local ugroup = self:GetUserGroup()
 
-		local a = list[ugroup]
-		local b = list[name]
+		ugroup = alias[ugroup] or aowl.UGroupAliases[ugroup] or ugroup
+
+		local a = list[ugroup] or 1
+		local b = list[name] or 3
 
 		return a and b and a >= b
 	end
 
-	function META:ShouldHideAdmins()
-		return self.hideadmins or false
-	end
-
-	function META:IsAdmin()
-
-		--Console?
-		if not self:IsValid() then return true end
-
-		if self:ShouldHideAdmins() then
-			return false
-		end
-		return self:CheckUserGroupLevel("developers")
-	end
-
-	function META:IsSuperAdmin()
-
-		--Console?
-		if not self:IsValid() then return true end
-
-		if self:ShouldHideAdmins() then
-			return false
-		end
-		return self:CheckUserGroupLevel("developers")
-	end
-
 	function META:TeleportingBlocked()
-		return hook.Run("CanPlyTeleport",self)==false
+		return hook.Run("CanPlyTeleport", self) == false
 	end
 
 	function META:IsUserGroup(name)
@@ -504,159 +501,8 @@ do -- groups
 		return ugroup == name or false
 	end
 
-	function META:GetUserGroup()
-		if self:ShouldHideAdmins() then
-			return "players"
-		end
-		return self:GetNetworkedString("UserGroup"):lower()
-	end
-
-	team.SetUp(1, "players", 		Color(68, 	112, 146))
-	--[[
-	team.SetUp(2, "developers", 	Color(147, 63,  147))
-	team.SetUp(3, "owners", 		Color(207, 110, 90))
-	team.SetUp(4, "emeritus", 		Color(98, 107, 192))
-	]]
-	team.SetUp(3002, "Players", Color(68, 112, 146))
-
-	if SERVER then
-		local dont_store =
-		{
-			"moderators",
-			"players",
-			"users",
-		}
-
-		local function clean_users(users, _steamid)
-
-			for name, group in pairs(users) do
-				name = name:lower()
-				if not list[name] then
-					users[name] = nil
-				else
-					for steamid in pairs(group) do
-						if steamid:lower() == _steamid:lower() then
-							group[steamid] = nil
-						end
-					end
-				end
-			end
-
-			return users
-		end
-
-		local function safe(str)
-			return str:gsub("{",""):gsub("}","")
-		end
-
-		function META:SetUserGroup(name, force)
-			name = name:Trim()
-			name = alias[name] or name
-
-			self:SetTeam(9003)
-			self:SetNetworkedString("UserGroup", name)
-			--[[
-			umsg.Start("aowl_join_team")
-				umsg.Entity(self)
-			umsg.End()
-			--]]
-
-			if force == false or #name == 0 then return end
-
-			name = name:lower()
-
-			if force or (not table.HasValue(dont_store, name) and list[name]) then
-				local users = luadata.ReadFile(USERSFILE)
-					users = clean_users(users, self:SteamID())
-					users[name] = users[name] or {}
-					users[name][self:SteamID()] = self:Nick():gsub("%A", "") or "???"
-				file.CreateDir("aowl")
-				luadata.WriteFile(USERSFILE, users)
-
-				aowlMsg("rank", string.format("Changing %s (%s) usergroup to %s",self:Nick(), self:SteamID(), name))
-			end
-		end
-
-		function aowl.GetUserGroupFromSteamID(id)
-			for name, users in pairs(luadata.ReadFile(USERSFILE)) do
-				for steamid, nick in pairs(users) do
-					if steamid == id then
-						return name, nick
-					end
-				end
-			end
-		end
-
-		function aowl.CheckUserGroupFromSteamID(id, name)
-			local group = aowl.GetUserGroupFromSteamID(id)
-
-			if group then
-				name = alias[name] or name
-
-				local a = list[group]
-				local b = list[name]
-
-				return a and b and a >= b
-			end
-
-			return false
-		end
-
-		local users_file_date,users_file_cache=-2,nil
-		hook.Add("PlayerSpawn", "PlayerAuthSpawn", function(ply)
-
-			ply:SetUserGroup("players")
-
-			if game.SinglePlayer() or ply:IsListenServerHost() then
-				ply:SetUserGroup("owners")
-				return
-			end
-
-			local timestamp = file.Time(USERSFILE, "DATA")
-			timestamp = timestamp and timestamp > 0 and timestamp or 0/0
-
-
-			if users_file_date ~= timestamp then
-				users_file_cache = luadata.ReadFile( USERSFILE ) or {}
-				users_file_date = timestamp
-			end
-
-			for name, users_file_cache in pairs(users_file_cache) do
-				for steamid in pairs(users_file_cache) do
-					if ply:SteamID() == steamid or ply:UniqueID() == steamid then
-						if ply:ShouldHideAdmins() then
-							ply:SetUserGroup("players",false)
-						else
-							ply:SetUserGroup(name, false)
-						end
-					end
-				end
-			end
-		end)
-
-		aowl.AddCommand("rank", function(player, line, target, rank)
-			local ent = easylua.FindEntity(target)
-
-			if ent:IsPlayer() and rank then
-				rank = rank:lower():Trim()
-				ent:SetUserGroup(rank, true) -- rank == "players") -- shouldn't it force-save no matter what?
-				hook.Run("AowlTargetCommand", player, "rank", ent, rank)
-			end
-		end, "owners")
-
-		aowl.AddCommand("administrate",function(pl,line, yesno)
-			local administrate=util.tobool(yesno)
-			if administrate then
-				pl.hideadmins=nil
-			elseif pl:IsAdmin() then
-				pl.hideadmins=true
-			end
-		end)
-	end
 end
 
 for _, file_name in ipairs((file.Find("notagain/aowl/commands/*", "LUA"))) do
 	include("notagain/aowl/commands/" .. file_name)
 end
-
-return aowl

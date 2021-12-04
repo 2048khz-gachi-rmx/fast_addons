@@ -9,16 +9,6 @@ local function IsStuck(ply)
 
 end
 
-hook.Add("CanPlyGotoPly", "aowl_togglegoto",function(ply, ply2)
-
-	if ply2.ToggleGoto_NoGoto and (ply2.IsBanned and ply2:IsBanned() or true) then
-		if ply2.IsFriend and ply2:IsFriend(ply) then return end
-
-		return false, (ply2 and ply2.IsPlayer and ply2:IsValid() and ply2:IsPlayer() and ply2:Nick() or tostring(ply2))
-						.." doesn't want to be disturbed!"
-	end
-end)
-
 -- helper
 local function SendPlayer( from, to )
 	local ok, reason = hook.Run("CanPlyGotoPly", from, to)
@@ -156,8 +146,9 @@ local function Goto(ply,line,target)
 	end
 
 	local oldpos = ply:GetPos() + Vector(0,0,32)
-	sound.Play("npc/dog/dog_footstep"..math.random(1,4)..".wav",oldpos)
-
+	if not ply:GetNWBool("Cloaked", false) then 
+		sound.Play("npc/dog/dog_footstep"..math.random(1,4)..".wav",oldpos)
+	end
 	local idk, reason = SendPlayer(ply, ent)
 	if idk == "HOOK" then
 		return false, reason
@@ -182,7 +173,9 @@ local function Goto(ply,line,target)
 	end
 
 	ply:SetEyeAngles((ent:EyePos() - ply:EyePos()):Angle())
-	ply:EmitSound("buttons/button15.wav")
+	if not ply:GetNWBool("Cloaked", false) then 
+		ply:EmitSound("buttons/button15.wav")
+	end
 	--ply:EmitSound("npc/dog/dog_footstep_run"..math.random(1,8)..".wav")
 	ply:SetVelocity(-ply:GetVelocity())
 
@@ -198,7 +191,7 @@ local function aowl_goto(ply, line, target)
 
 	return Goto(ply,line,target)
 end
-aowl.AddCommand({"goto","warp","go"}, aowl_goto, "players")
+aowl.AddCommand({"goto","warp","go", "owo"}, aowl_goto, "mods")
 
 
 aowl.AddCommand("tp", function(pl,line,target,...)
@@ -271,7 +264,7 @@ aowl.AddCommand("tp", function(pl,line,target,...)
 
 	pl:SetPos(tr.HitPos)
 	pl:EmitSound"ui/freeze_cam.wav"
-end, "players")
+end, "mods")
 
 
 aowl.AddCommand("send", function(ply, line, whos, where)
@@ -325,92 +318,10 @@ aowl.AddCommand("send", function(ply, line, whos, where)
 
 	return false, aowl.TargetNotFound(whos)
 
-end,"developers")
-
-aowl.AddCommand("togglegoto", function(ply, line) -- This doesn't do what it says. Lol.
-	local nogoto = not ply.ToggleGoto_NoGoto
-	ply.ToggleGoto_NoGoto = nogoto
-	ply:ChatPrint(nogoto and "Disabled goto (friends will still be able to teleport to you.)" or "Enabled goto.")
-end)
-
-aowl.AddCommand("gotoid", function(ply, line, target)
-	if not target or string.Trim(target)=='' then return false end
-	local function loading(s)
-		ply:SendLua(string.format("local l=notification l.Kill'aowl_gotoid'l.AddProgress('aowl_gotoid',%q)",s))
-	end
-	local function kill(s,typ)
-		if not IsValid(ply) then return false end
-		ply:SendLua[[notification.Kill'aowl_gotoid']]
-		if s then aowl.Message(ply,s,typ or 'error') end
-	end
-
-	local url
-	local function gotoip(str)
-		if not ply:IsValid() then return end
-		local ip = str:match[[In%-Game.-Garry's Mod.-steam://connect/([0-9]+%.[0-9]+%.[0-9]+%.[0-9]+%:[0-9]+).-Join]]
-		if ip then
-			if co and co.serverinfo and serverquery then
-				co(function()
-					local info = co.serverinfo(ip)
-					if not info or not info.name then return end
-					aowl.Message(ply, ("server name: %q"):format(info.name), 'generic')
-				end)
-			end
-			kill(string.format("found %q from %q", ip, target),"generic")
-			aowl.Message(ply,'connecting in 5 seconds.. press jump to abort','generic')
-
-			local uid = tostring(ply) .. "_aowl_gotoid"
-			timer.Create(uid,5,1,function()
-				hook.Remove('KeyPress',uid)
-				if not IsValid(ply) then return end
-
-				kill'connecting!'
-				ply:Cexec("connect " .. ip)
-			end)
-
-			hook.Add("KeyPress", uid, function(_ply, key)
-				if key == IN_JUMP and _ply == ply then
-					timer.Remove(uid)
-					kill'aborted gotoid!'
-
-					hook.Remove('KeyPress',uid)
-				end
-			end)
-		else
-			kill(string.format('could not fetch the server ip from %q',target))
-		end
-	end
-	local function gotoid()
-		if not ply:IsValid() then return end
-
-		loading'looking up steamid ...'
-
-		http.Fetch(url, function(str)
-			gotoip(str)
-		end,function(err)
-			kill(string.format('load error: %q',err or ''))
-		end)
-	end
-
-	if tonumber(target) then
-		url = ("http://steamcommunity.com/profiles/%s/?xml=1"):format(target)
-		gotoid()
-	elseif target:find("STEAM") then
-		url = ("http://steamcommunity.com/profiles/%s/?xml=1"):format(util.SteamIDTo64(target))
-		gotoid()
-	else
-		loading'looking up player ...'
-
-		http.Post(string.format("http://steamcommunity.com/actions/Search?T=Account&K=%q", target:gsub("%p", function(char) return "%" .. ("%X"):format(char:byte()) end)), "", function(str)
-			gotoip(str)
-		end,function(err)
-			kill(string.format('load error: %q',err or ''))
-		end)
-	end
-end)
+end,"mods")
 
 aowl.AddCommand("back", function(ply, line, target)
-	local ent = ply:CheckUserGroupLevel("developers") and target and easylua.FindEntity(target) or ply
+	local ent = ply:CheckUserGroupLevel("admins") and target and easylua.FindEntity(target) or ply
 
 	if not IsValid(ent) then
 		return false, "Invalid player"
@@ -427,14 +338,14 @@ aowl.AddCommand("back", function(ply, line, target)
 	ent.aowl_tpprevious = ent:GetPos()
 	ent:SetPos( prev )
 	hook.Run("AowlTargetCommand", ply, "back", ent)
-end, "players")
+end, "mods")
 
 aowl.AddCommand("bring", function(ply, line, target, yes)
 
 	local ent = easylua.FindEntity(target)
 
 	if ent:IsValid() and ent ~= ply then
-		if ply:CheckUserGroupLevel("developers") or (ply.IsBanned and ply:IsBanned()) then
+		if ply:CheckUserGroupLevel("admins") then
 
 			if ent:IsPlayer() and not ent:Alive() then ent:Spawn() end
 			if ent:IsPlayer() and ent:InVehicle() then
@@ -490,51 +401,14 @@ aowl.AddCommand("bring", function(ply, line, target, yes)
 			end
 		end
 		return
-	end
 
-	if CrossLua and yes then
-		local sane = target:gsub(".", function(a) return "\\" .. a:byte() end )
-		local ME = ply:UniqueID()
-
-		CrossLua([[return easylua.FindEntity("]] .. sane .. [["):IsPlayer()]], function(ok)
-			if not ok then
-				-- oh nope
-			elseif ply:CheckUserGroupLevel("developers") then
-				CrossLua([=[local ply = easylua.FindEntity("]=] .. sane .. [=[")
-					ply:ChatPrint[[Teleporting Thee upon player's request]]
-					timer.Simple(3, function()
-						ply:SendLua([[LocalPlayer():ConCommand("connect ]=] .. GetConVarString"ip" .. ":" .. GetConVarString"hostport" .. [=[")]])
-					end)
-
-					return ply:UniqueID()
-				]=], function(uid)
-					hook.Add("PlayerInitialSpawn", "crossserverbring_"..uid, function(p)
-						if p:UniqueID() == uid then
-							ply:ConCommand("aowl goto " .. ME)
-
-							hook.Remove("PlayerInitialSpawn", "crossserverbring_"..uid)
-						end
-					end)
-
-					timer.Simple(180, function()
-						hook.Remove("PlayerInitialSpawn", "crossserverbring_"..uid)
-					end)
-				end)
-
-				-- oh found
-			end
-		end)
-
-		return false, aowl.TargetNotFound(target) .. ", looking on another servers"
-	elseif CrossLua and not yes then
-		return false, aowl.TargetNotFound(target) .. ", try CrossServer Bring?? !bring <name>,yes"
 	else
 		return false, aowl.TargetNotFound(target)
 	end
-end, "players")
+end, "mods")
 
 aowl.AddCommand("spawn", function(ply, line, target)
-	local ent = ply:CheckUserGroupLevel("developers") and target and easylua.FindEntity(target) or ply
+	local ent = ply:CheckUserGroupLevel("admins") and target and easylua.FindEntity(target) or ply
 	if not ent:IsValid() then return false,'not found' end
 
 	if ent == ply then
@@ -553,7 +427,7 @@ aowl.AddCommand("spawn", function(ply, line, target)
 			ent:Spawn()
 		end)
 	end
-end, "players")
+end, "mods")
 
 aowl.AddCommand({"resurrect", "respawn", "revive"}, function(ply, line, target)
 	-- Admins not allowed either, this is added for gamemodes and stuff
@@ -562,10 +436,10 @@ aowl.AddCommand({"resurrect", "respawn", "revive"}, function(ply, line, target)
 		return false, reason and tostring(reason) or "Revive is disallowed"
 	end
 
-	local ent = ply:CheckUserGroupLevel("developers") and target and easylua.FindEntity(target) or ply
+	local ent = ply:CheckUserGroupLevel("admins") and target and easylua.FindEntity(target) or ply
 	if ent:IsValid() and ent:IsPlayer() and not ent:Alive() then
 		local pos,ang = ent:GetPos(),ent:EyeAngles()
 		ent:Spawn()
 		ent:SetPos(pos) ent:SetEyeAngles(ang)
 	end
-end, "players", true)
+end, "mods", true)

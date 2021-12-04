@@ -60,5 +60,5 @@ if SERVER then
 				umsg.Long(angvel or 0)
 			umsg.End()
 		end
-	end)
+	end, "mods")
 end

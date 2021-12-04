@@ -49,16 +49,10 @@ do
 			local err
 
 			if type(try) == "function" then
-				local res, ret = pcall(try, name)
+				local ret = try(name)
 
-				if res == true then
-					if ret then
-						return ret
-					else
-						err = ""
-					end
-				else
-					err = ret
+				if ret then
+					return ret
 				end
 			else
 				res, err = load_path(dir .. try:format(name))
@@ -117,6 +111,8 @@ do
 			return nil, errors
 		end
 
+		if not isfunction(func) then return func end
+
 		local ok, ret = pcall(func, ...)
 
 		if ok == false then
@@ -147,6 +143,7 @@ function notagain.Load()
 	end
 
 	for _, addon_dir in ipairs(notagain.directories) do
+
 		do -- autorun
 			local dir = addon_dir .. "/autorun/"
 
@@ -160,7 +157,6 @@ function notagain.Load()
 
 			for _, name in pairs((file.Find(dir .. "client/*.lua", "LUA"))) do
 				local path = dir .. "client/" .. name
-
 				if CLIENT then
 					include(path)
 				end
@@ -177,24 +173,25 @@ function notagain.Load()
 			end
 		end
 
-		if SERVER then -- libraries
+		--if SERVER then -- libraries
 			local dir = addon_dir .. "/libraries/"
 
 			for _, name in pairs((file.Find(dir .. "*.lua", "LUA"))) do
+				include(dir .. name)
 				AddCSLuaFile(dir .. name)
 			end
 
 			for _, name in pairs((file.Find(dir .. "client/*.lua", "LUA"))) do
 				AddCSLuaFile(dir .. "client/" .. name)
 			end
-		end
+		--end
 	end
 end
 
 
 function _G.requirex(name, ...)
 	local res, err = notagain.GetLibrary(name, ...)
-	if res == nil then error(err, 2) end
+	if res == nil then error("while including " .. name .. ": " .. err, 2) end
 	return res
 end
 

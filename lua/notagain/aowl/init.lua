@@ -497,8 +497,10 @@ do -- groups
 		name = name:lower()
 
 		local ugroup = self:GetUserGroup()
+		ugroup = alias[ugroup] or ugroup
+		ugroup = ugroup:lower()
 
-		return ugroup == name or false
+		return ugroup == name
 	end
 
 end
